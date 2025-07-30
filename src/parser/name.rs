@@ -1,65 +1,68 @@
 use nom::{
-    branch::alt,
-    combinator::recognize,
-    multi::many_till, // `count` is in `multi`
-    number::complete::{be_u16, u8},
-    sequence::preceded,
-    bytes::complete::take, // `take` is for byte slices
+    bytes::complete::take,
+    number::complete::u8,
     IResult,
 };
 
-// This helper now correctly takes a slice and returns a slice
-fn parse_label(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let (input, len) = u8(input)?;
-    take(len)(input)
-}
-
+/// Recursively parses a domain name.
+///
+/// Each call to this function parses one component:
+/// - A pointer (starts with 0b11...): Jumps to another location and parses from there.
+/// - A label: Reads a length byte `L` and `L` bytes of content, then recursively calls itself for the rest.
+/// - A null byte: Terminates the recursion, returning an empty string.
 fn parse_name_recursive<'a>(
-    original_input: &'a [u8],
-    input: &'a [u8],
-    depth: u8,
+    original_input: &'a [u8], // The complete DNS packet buffer for pointer jumps
+    input: &'a [u8],          // The current position we are parsing from
+    depth: u8,                // Recursion depth to prevent infinite loops
 ) -> IResult<&'a [u8], String> {
-    if depth > 10 { // recursion limit
-        return Err(nom::Err::Failure(nom::error::Error::new(input, nom::error::ErrorKind::TooLarge)));
+    // Prevent infinite loops from malformed pointer cycles
+    if depth > 10 {
+        return Err(nom::Err::Failure(nom::error::Error::new(
+            input,
+            nom::error::ErrorKind::TooLarge,
+        )));
     }
 
-    // `many_till` will read labels until it finds a null byte (the second parser).
-    let (input, (labels, _)) = many_till(
-        // We recognize either a normal label or a pointer start byte.
-        recognize(alt((
-            parse_label,
-            // A pointer is just 2 bytes starting with 0b11...
-            recognize(preceded(take(1u8), take(1u8))),
-        ))),
-        // The terminator is a single null byte.
-        u8,
-    )(input)?;
+    // Peek at the first byte to decide what to do
+    let (input_after_peek, first_byte) = u8(input)?;
 
-    let mut name = String::new();
-    let mut needs_dot = false;
-    for label_slice in labels {
-        if (label_slice[0] & 0xC0) == 0xC0 { // It's a pointer
-            // The slice is 2 bytes long, parse it as a u16.
-            let (_, offset) = be_u16(label_slice)?;
-            let offset = (offset & 0x3FFF) as usize;
+    // Case 1: The name is a pointer to another location
+    if (first_byte & 0xC0) == 0xC0 {
+        // Pointers are 2 bytes. We already read the first, now read the second.
+        let (input_after_ptr, second_byte) = u8(input_after_peek)?;
+        let offset = (((first_byte & 0x3F) as u16) << 8 | second_byte as u16) as usize;
 
-            // Recursively parse from the new offset.
-            let (_, pointed_name) = parse_name_recursive(original_input, &original_input[offset..], depth + 1)?;
-            if needs_dot { name.push('.'); }
-            name.push_str(&pointed_name);
-            // After a pointer, the name is complete.
-            return Ok((input, name));
-        } else { // It's a standard label
-            let len = label_slice[0] as usize;
-            if needs_dot { name.push('.'); }
-            // Slice the content from after the length byte.
-            name.push_str(&String::from_utf8_lossy(&label_slice[1..=len]));
-            needs_dot = true;
-        }
+        // Recursively parse from the new offset using the *original* buffer.
+        // The main `input` stream continues from *after* the 2-byte pointer.
+        let (_, pointed_name) =
+            parse_name_recursive(original_input, &original_input[offset..], depth + 1)?;
+        return Ok((input_after_ptr, pointed_name));
     }
-    Ok((input, name))
+
+    // Case 2: This is the end of the name (the null terminator)
+    if first_byte == 0 {
+        return Ok((input_after_peek, String::new()));
+    }
+
+    // Case 3: It's a standard label.
+    // The first byte is the length of the label.
+    let (input_after_label, label_data) = take(first_byte)(input_after_peek)?;
+    let label_str = String::from_utf8_lossy(label_data).to_string();
+
+    // After parsing this label, recursively parse the rest of the name.
+    let (final_input, rest_of_name) =
+        parse_name_recursive(original_input, input_after_label, depth)?;
+
+    // Combine the current label with the rest of the name.
+    if rest_of_name.is_empty() {
+        Ok((final_input, label_str))
+    } else {
+        Ok((final_input, format!("{}.{}", label_str, rest_of_name)))
+    }
 }
 
-pub fn parse_name<'a>(original_input: &'a[u8]) -> impl Fn(&'a[u8]) -> IResult<&'a [u8], String> {
+/// Creates a nom parser for a domain name.
+/// It captures the original input buffer to handle pointers correctly.
+pub fn parse_name<'a>(original_input: &'a [u8]) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], String> {
     move |input: &'a [u8]| parse_name_recursive(original_input, input, 0)
 }
