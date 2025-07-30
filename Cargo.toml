@@ -6,6 +6,25 @@ edition = "2021"
 rust-version = "1.80"
 
 [dependencies]
-anyhow = "1.0.68"                                # error handling
-bytes = "1.3.0"                                  # helps manage buffers
-thiserror = "1.0.38"                             # error handling
+# Async Runtime & Networking
+tokio = { version = "1.28", features = ["full"] }
+
+# Parser-Combinator Framework for safe and efficient parsing
+nom = "7.1"
+
+# Ergonomic Buffer Management
+bytes = "1.5"
+
+# Command-Line Argument Parsing
+clap = { version = "4.5", features = ["derive"] }
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging Facade and Implementation
+log = "0.4"
+env_logger = "0.11"
+
+# Type-safe conversions from integers to enums
+num_enum = "0.7"

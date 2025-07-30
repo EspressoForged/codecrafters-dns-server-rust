@@ -1,27 +1,32 @@
-#[allow(unused_imports)]
-use std::net::UdpSocket;
+use clap::Parser;
+use codecrafters_dns_server::handlers::{StagedResponseHandler};
+use codecrafters_dns_server::handlers::forwarder::ForwardingHandler;
+use codecrafters_dns_server::{Result, DnsServer};
 
-fn main() {
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[arg(short, long)]
+    resolver: Option<String>,
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    env_logger::init();
     println!("Logs from your program will appear here!");
 
-    // Uncomment this block to pass the first stage
-    // let udp_socket = UdpSocket::bind("127.0.0.1:2053").expect("Failed to bind to address");
-    // let mut buf = [0; 512];
-    //
-    // loop {
-    //     match udp_socket.recv_from(&mut buf) {
-    //         Ok((size, source)) => {
-    //             println!("Received {} bytes from {}", size, source);
-    //             let response = [];
-    //             udp_socket
-    //                 .send_to(&response, source)
-    //                 .expect("Failed to send response");
-    //         }
-    //         Err(e) => {
-    //             eprintln!("Error receiving data: {}", e);
-    //             break;
-    //         }
-    //     }
-    // }
+    let cli = Cli::parse();
+    
+    // The logic is now cleaner, using a concrete type for each branch.
+    if let Some(resolver_str) = cli.resolver {
+        let handler = ForwardingHandler::new(resolver_str).await?;
+        let server = DnsServer::new(handler).await?;
+        server.run().await?;
+    } else {
+        let handler = StagedResponseHandler{};
+        let server = DnsServer::new(handler).await?;
+        server.run().await?;
+    };
+    
+    Ok(())
 }
