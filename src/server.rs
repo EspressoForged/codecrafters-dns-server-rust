@@ -6,7 +6,6 @@ use std::sync::Arc;
 use tokio::net::UdpSocket;
 use log::{info, error};
 
-// The struct is now generic over any type that implements QueryHandler.
 pub struct DnsServer<H: QueryHandler> {
     socket: Arc<UdpSocket>,
     handler: Arc<H>,

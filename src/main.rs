@@ -17,7 +17,6 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
     
-    // The logic is now cleaner, using a concrete type for each branch.
     if let Some(resolver_str) = cli.resolver {
         let handler = ForwardingHandler::new(resolver_str).await?;
         let server = DnsServer::new(handler).await?;

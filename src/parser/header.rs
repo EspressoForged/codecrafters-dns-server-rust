@@ -11,14 +11,11 @@ use nom::{
 use std::convert::TryFrom;
 
 // A type alias for the complex tuple that our flags parser returns.
-// This improves readability significantly.
 type DnsFlags = (bool, u8, bool, bool, bool, bool, u8);
 
 fn parse_flags(input: &[u8]) -> IResult<&[u8], DnsFlags> {
     let (input, flags_slice) = take_bytes(2usize)(input)?;
     
-    // We now provide a full type annotation for the tuple's output.
-    // This tells `nom` exactly what integer types to infer for each `take`.
     let (_, (qr, opcode, aa, tc, rd, ra, _z, rcode_val)): (_, (bool, u8, bool, bool, bool, bool, u8, u8)) =
         bits::<_, _, NomError<(&[u8], usize)>, _, _>(tuple((
             bool,
@@ -37,7 +34,7 @@ fn parse_flags(input: &[u8]) -> IResult<&[u8], DnsFlags> {
 pub fn parse_header(input: &[u8]) -> IResult<&[u8], DnsHeader> {
     let (input, (id, flags, qd, an, ns, ar)) = tuple((
         be_u16,
-        parse_flags, // The return type is now the clean `DnsFlags` alias.
+        parse_flags,
         be_u16,
         be_u16,
         be_u16,

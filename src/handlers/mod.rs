@@ -6,7 +6,6 @@ use std::pin::Pin;
 // Declare the forwarder module so it can be used by other parts of the crate.
 pub mod forwarder;
 
-// The trait now uses a "GAT" (Generic Associated Type) style to return a Sendable future.
 pub trait QueryHandler: Send + Sync {
     fn handle_query<'a>(
         &'a self,
@@ -16,7 +15,6 @@ pub trait QueryHandler: Send + Sync {
 
 pub struct StagedResponseHandler;
 
-// We implement the trait by returning a pinned, boxed, async block.
 impl QueryHandler for StagedResponseHandler {
     fn handle_query<'a>(
         &'a self,

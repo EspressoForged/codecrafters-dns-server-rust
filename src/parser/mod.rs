@@ -15,7 +15,7 @@ pub fn parse_message(input: &[u8]) -> Result<DnsMessage> {
     
     // Using the counts from the header, parse the questions.
     // We must call `question::parse_question(input)` here to create a parser
-    // that has captured the *entire original input slice* for handling name compression.
+    // that has captured the entire original input slice for handling name compression.
     let (remaining, questions) = count(question::parse_question(input), header.question_count as usize)(remaining)
         .map_err(|e| Error::ParseError(e.to_string()))?;
 
